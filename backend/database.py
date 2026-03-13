@@ -10,13 +10,14 @@ default_sqlite_url = "sqlite:///./test.db"
 database_url = os.getenv("DATABASE_URL", default_sqlite_url)
 
 database_url = database_url.replace("cockroachdb://", "cockroachdb+psycopg://", 1)
+print(f"Connecting to: {database_url}")
 
 
 
 # For CockroachDB, skip version detection to avoid parsing errors
 
 
-engine = create_engine(database_url, connect_args={"sslmode": "require"})
+engine = create_engine(database_url)
 
 
 
