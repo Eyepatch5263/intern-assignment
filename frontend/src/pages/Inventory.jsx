@@ -1,91 +1,21 @@
 import { useState, useEffect, useCallback } from "react";
-import { inventoryApi } from "../api";
-import StatusBadge from "../components/StatusBadge";
+import { inventoryApi, purchaseOrderApi, salesApi } from "../api";
 import Spinner from "../components/Spinner";
+import { fmt } from "../utils";
+import { EMPTY_FORM, EMPTY_SALE_LINE, EMPTY_PURCHASE_FORM } from "../constant";
+import MedicineForm from "../components/MedicineForm";
+import Modal from "../components/Modal";
+import Topbar from "../components/inventory_components/Topbar";
+import InventoryActions from "../components/inventory_components/InventoryActions";
+import Stats from "../components/inventory_components/Stats";
+import InventorySearch from "../components/inventory_components/InventorySearch";
+import StatusChip from "../components/inventory_components/StatusChip";
+import InventoryTable from "../components/inventory_components/InventoryTable";
+import StatusChangeModal from "../components/inventory_components/StatusChangeModal";
+import CreateSaleForm from "../components/inventory_components/CreateSaleForm";
+import CreatePurchaseForm from "../components/inventory_components/CreatePurchaseForm";
 
-const EMPTY_FORM = {
-  name: "", category: "", manufacturer: "", price: "", stock: "",
-  low_stock_threshold: "20", expiry_date: "", description: "",
-};
-
-const STATUS_OPTS = ["Active", "Low Stock", "Expired", "Out of Stock"];
-
-function fmt(n) { return "$" + Number(n || 0).toFixed(2); }
-
-function Modal({ title, onClose, children }) {
-  return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div className="modal-header">
-          <div className="modal-title">{title}</div>
-          <button className="modal-close" onClick={onClose}>
-            <svg xmlns="http://www.w3.org/2000/svg" width={20} height={20} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function MedicineForm({ form, setForm, onSubmit, onClose, saving, formError }) {
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  return (
-    <form onSubmit={onSubmit}>
-      {formError && <div className="error-box">{formError}</div>}
-      <div className="form-row">
-        <div className="form-group">
-          <label className="form-label">Medicine Name *</label>
-          <input className="input" value={form.name} onChange={set("name")} required placeholder="e.g. Paracetamol 500mg" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Category *</label>
-          <input className="input" value={form.category} onChange={set("category")} required placeholder="e.g. Analgesic" />
-        </div>
-      </div>
-      <div className="form-row">
-        <div className="form-group">
-          <label className="form-label">Manufacturer</label>
-          <input className="input" value={form.manufacturer} onChange={set("manufacturer")} placeholder="e.g. GSK" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Price (USD) *</label>
-          <input className="input" type="number" step="0.01" min="0" value={form.price} onChange={set("price")} required placeholder="0.00" />
-        </div>
-      </div>
-      <div className="form-row">
-        <div className="form-group">
-          <label className="form-label">Stock Quantity *</label>
-          <input className="input" type="number" min="0" value={form.stock} onChange={set("stock")} required placeholder="0" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Low Stock Threshold</label>
-          <input className="input" type="number" min="1" value={form.low_stock_threshold} onChange={set("low_stock_threshold")} placeholder="20" />
-        </div>
-      </div>
-      <div className="form-row">
-        <div className="form-group">
-          <label className="form-label">Expiry Date</label>
-          <input className="input" type="date" value={form.expiry_date} onChange={set("expiry_date")} />
-        </div>
-      </div>
-      <div className="form-group">
-        <label className="form-label">Description</label>
-        <textarea className="input" rows={2} value={form.description} onChange={set("description")} placeholder="Optional notes..." style={{ resize: "vertical" }} />
-      </div>
-      <div className="modal-footer">
-        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-        <button type="submit" className="btn btn-primary" disabled={saving}>
-          {saving ? "Saving..." : "Save Medicine"}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-export default function Inventory() {
+export default function Inventory({ onNavigateDashboard }) {
   const [medicines, setMedicines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -101,6 +31,21 @@ export default function Inventory() {
   const [formError, setFormError] = useState(null);
 
   const [statusChangeMed, setStatusChangeMed] = useState(null);
+
+  const [showSale, setShowSale] = useState(false);
+  const [saleCustomer, setSaleCustomer] = useState("Walk-in Customer");
+  const [saleItems, setSaleItems] = useState([{ ...EMPTY_SALE_LINE }]);
+  const [saleMedicines, setSaleMedicines] = useState([]);
+  const [saleLoading, setSaleLoading] = useState(false);
+  const [saleSaving, setSaleSaving] = useState(false);
+  const [saleError, setSaleError] = useState(null);
+
+  const [showPurchase, setShowPurchase] = useState(false);
+  const [purchaseForm, setPurchaseForm] = useState(EMPTY_PURCHASE_FORM);
+  const [purchaseMedicines, setPurchaseMedicines] = useState([]);
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
+  const [purchaseSaving, setPurchaseSaving] = useState(false);
+  const [purchaseError, setPurchaseError] = useState(null);
 
   const fetchData = useCallback(() => {
     const params = {};
@@ -168,6 +113,133 @@ export default function Inventory() {
     setStatusChangeMed(null);
   };
 
+  const openSaleModal = async () => {
+    setShowSale(true);
+    setSaleError(null);
+    setSaleLoading(true);
+    setSaleCustomer("Walk-in Customer");
+    setSaleItems([{ ...EMPTY_SALE_LINE }]);
+    try {
+      const all = await inventoryApi.getMedicines();
+      setSaleMedicines(all.filter((m) => m.stock > 0 && m.status !== "Expired"));
+    } catch {
+      setSaleError("Failed to load medicines for sale.");
+    } finally {
+      setSaleLoading(false);
+    }
+  };
+
+  const updateSaleLine = (idx, key, value) => {
+    setSaleItems((lines) => lines.map((line, i) => (i === idx ? { ...line, [key]: value } : line)));
+  };
+
+  const addSaleLine = () => setSaleItems((lines) => [...lines, { ...EMPTY_SALE_LINE }]);
+  const removeSaleLine = (idx) => setSaleItems((lines) => lines.filter((_, i) => i !== idx));
+
+  const handleCreateSale = async (e) => {
+    e.preventDefault();
+    setSaleError(null);
+
+    const validItems = saleItems
+      .filter((line) => line.medicine_id)
+      .map((line) => ({
+        medicine_id: parseInt(line.medicine_id, 10),
+        quantity: parseInt(line.quantity, 10),
+      }))
+      .filter((line) => Number.isInteger(line.medicine_id) && Number.isInteger(line.quantity) && line.quantity > 0);
+
+    if (validItems.length === 0) {
+      setSaleError("Add at least one medicine with a valid quantity.");
+      return;
+    }
+
+    setSaleSaving(true);
+    try {
+      await salesApi.createSale({
+        customer_name: saleCustomer?.trim() || "Walk-in Customer",
+        items: validItems,
+      });
+      setShowSale(false);
+      fetchData();
+      if (onNavigateDashboard) {
+        onNavigateDashboard("sales");
+      }
+    } catch (err) {
+      setSaleError(err.response?.data?.detail || "Failed to create sale.");
+    } finally {
+      setSaleSaving(false);
+    }
+  };
+
+  const openPurchaseModal = async () => {
+    setShowPurchase(true);
+    setPurchaseError(null);
+    setPurchaseLoading(true);
+    setPurchaseForm(EMPTY_PURCHASE_FORM);
+
+    try {
+      const all = await inventoryApi.getMedicines();
+      setPurchaseMedicines(all);
+    } catch {
+      setPurchaseError("Failed to load medicines for purchase.");
+    } finally {
+      setPurchaseLoading(false);
+    }
+  };
+
+  const handleCreatePurchase = async (e) => {
+    e.preventDefault();
+    setPurchaseError(null);
+
+    const medicineId = parseInt(purchaseForm.medicine_id, 10);
+    const quantity = parseInt(purchaseForm.quantity, 10);
+    const unitCost = parseFloat(purchaseForm.unit_cost);
+
+    if (!Number.isInteger(medicineId) || medicineId <= 0) {
+      setPurchaseError("Please select a medicine.");
+      return;
+    }
+
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      setPurchaseError("Quantity must be greater than 0.");
+      return;
+    }
+
+    if (!Number.isFinite(unitCost) || unitCost < 0) {
+      setPurchaseError("Unit cost must be 0 or greater.");
+      return;
+    }
+
+    setPurchaseSaving(true);
+    try {
+      const order = await purchaseOrderApi.createOrder({
+        medicine_id: medicineId,
+        quantity,
+        unit_cost: unitCost,
+        supplier: purchaseForm.supplier?.trim() || null,
+      });
+
+      // Purchase impacts stock only when delivered.
+      if (purchaseForm.mark_delivered) {
+        await purchaseOrderApi.updateStatus(order.id, "Delivered");
+      }
+
+      setShowPurchase(false);
+      fetchData();
+      if (onNavigateDashboard) {
+        onNavigateDashboard("purchase");
+      }
+    } catch (err) {
+      setPurchaseError(err.response?.data?.detail || "Failed to create purchase.");
+    } finally {
+      setPurchaseSaving(false);
+    }
+  };
+
+  const selectedMedicineIds = new Set(
+    saleItems.filter((line) => line.medicine_id).map((line) => Number(line.medicine_id))
+  );
+
   // Summary counts
   const counts = medicines.reduce((acc, m) => {
     acc[m.status] = (acc[m.status] || 0) + 1;
@@ -177,158 +249,24 @@ export default function Inventory() {
 
   return (
     <>
-      <div className="top-bar">
-        <div className="top-bar-left">
-          <h1>Inventory</h1>
-          <p>Manage medicines &amp; stock levels</p>
-        </div>
-        <div className="top-bar-right">
-          <button className="btn btn-primary" onClick={openAdd}>
-            <svg xmlns="http://www.w3.org/2000/svg" width={16} height={16} fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            Add Medicine
-          </button>
-        </div>
-      </div>
-
+      {/* Topbar */}
+      <Topbar openAdd={() => setShowAdd(true)} />
       <div className="page-content">
-        {/* Overview */}
-        <div className="section" style={{ marginBottom: 20 }}>
-          <div className="overview-row">
-            <div className="stat-mini">
-              <div className="stat-mini-label">Total Items</div>
-              <div className="stat-mini-val">{medicines.length}</div>
-            </div>
-            <div className="stat-mini">
-              <div className="stat-mini-label">Active</div>
-              <div className="stat-mini-val" style={{ color: "var(--success)" }}>{counts["Active"] || 0}</div>
-            </div>
-            <div className="stat-mini">
-              <div className="stat-mini-label">Low Stock</div>
-              <div className="stat-mini-val" style={{ color: "var(--warning)" }}>{counts["Low Stock"] || 0}</div>
-            </div>
-            <div className="stat-mini">
-              <div className="stat-mini-label">Out of Stock</div>
-              <div className="stat-mini-val" style={{ color: "var(--gray-500)" }}>{counts["Out of Stock"] || 0}</div>
-            </div>
-            <div className="stat-mini">
-              <div className="stat-mini-label">Expired</div>
-              <div className="stat-mini-val" style={{ color: "var(--danger)" }}>{counts["Expired"] || 0}</div>
-            </div>
-            <div className="stat-mini">
-              <div className="stat-mini-label">Inventory Value</div>
-              <div className="stat-mini-val" style={{ fontSize: 18 }}>${totalValue.toFixed(0)}</div>
-            </div>
-          </div>
-        </div>
-
+        {/* Inventory Actions */}
+        <InventoryActions onNavigateDashboard={onNavigateDashboard} openSaleModal={openSaleModal} openPurchaseModal={openPurchaseModal} />``
+        {/* Stats */}
+        <Stats medicines={medicines} counts={counts} totalValue={totalValue} fmt={fmt} />
         {/* Inventory table */}
         <div className="section">
-          <div className="section-header">
-            <div className="section-title">Medicine List</div>
-            <div className="flex items-center gap-8" style={{ flexWrap: "wrap", gap: 10 }}>
-              {/* Search */}
-              <div className="search-wrap" style={{ width: 220 }}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input className="input" placeholder="Search medicines..." value={search} onChange={(e) => setSearch(e.target.value)} />
-              </div>
-              {/* Category filter */}
-              <select className="select" style={{ width: 150 }} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-                <option value="">All Categories</option>
-                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
+          {/* Search and Filter */}
+          <InventorySearch search={search} setSearch={setSearch} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} categories={categories} />
 
           {/* Status chips */}
-          <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--gray-100)" }}>
-            <div className="filter-bar">
-              {["", "Active", "Low Stock", "Out of Stock", "Expired"].map((s) => (
-                <button key={s} className={`chip ${statusFilter === s ? "active" : ""}`} onClick={() => setStatusFilter(s)}>
-                  {s || "All Status"}
-                </button>
-              ))}
-            </div>
-          </div>
+          <StatusChip statusFilter={statusFilter} setStatusFilter={setStatusFilter} />
 
           {error && <div className="error-box" style={{ margin: 20 }}>{error}</div>}
-
-          <div className="table-wrap">
-            {loading ? (
-              <Spinner />
-            ) : medicines.length === 0 ? (
-              <div className="empty-state">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                </svg>
-                <p>No medicines found</p>
-              </div>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Medicine</th>
-                    <th>Category</th>
-                    <th>Manufacturer</th>
-                    <th>Price</th>
-                    <th>Stock</th>
-                    <th>Expiry</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {medicines.map((med) => (
-                    <tr key={med.id}>
-                      <td>
-                        <div className="td-bold">{med.name}</div>
-                        {med.description && <div className="td-muted" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{med.description}</div>}
-                      </td>
-                      <td>
-                        <span style={{ background: "var(--gray-100)", padding: "2px 8px", borderRadius: 4, fontSize: 12 }}>{med.category}</span>
-                      </td>
-                      <td>{med.manufacturer || <span className="td-muted">—</span>}</td>
-                      <td><span style={{ fontWeight: 600 }}>{fmt(med.price)}</span></td>
-                      <td>
-                        <span style={{
-                          fontWeight: 600,
-                          color: med.stock === 0 ? "var(--gray-400)" : med.stock <= med.low_stock_threshold ? "var(--warning)" : "var(--gray-800)"
-                        }}>
-                          {med.stock}
-                        </span>
-                        <span className="td-muted"> / {med.low_stock_threshold}</span>
-                      </td>
-                      <td>
-                        {med.expiry_date
-                          ? <span className={new Date(med.expiry_date) < new Date() ? "td-muted" : ""}>{med.expiry_date}</span>
-                          : <span className="td-muted">—</span>}
-                      </td>
-                      <td><StatusBadge status={med.status} /></td>
-                      <td>
-                        <div className="action-btns">
-                          <button className="btn btn-secondary btn-sm" onClick={() => openEdit(med)} title="Edit">
-                            <svg xmlns="http://www.w3.org/2000/svg" width={14} height={14} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            Edit
-                          </button>
-                          <button className="btn btn-secondary btn-sm" onClick={() => setStatusChangeMed(med)} title="Change Status">
-                            <svg xmlns="http://www.w3.org/2000/svg" width={14} height={14} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                            </svg>
-                            Status
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+          {/* Inventory table */}
+          <InventoryTable loading={loading} medicines={medicines} openEdit={openEdit} setStatusChangeMed={setStatusChangeMed} fmt={fmt} />
         </div>
       </div>
 
@@ -348,26 +286,28 @@ export default function Inventory() {
 
       {/* Status Change Modal */}
       {statusChangeMed && (
-        <Modal title="Update Status" onClose={() => setStatusChangeMed(null)}>
-          <p style={{ color: "var(--gray-600)", marginBottom: 16 }}>
-            Change status for <strong>{statusChangeMed.name}</strong>
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {STATUS_OPTS.map((s) => (
-              <button
-                key={s}
-                className={`btn ${statusChangeMed.status === s ? "btn-primary" : "btn-secondary"}`}
-                style={{ justifyContent: "flex-start", textAlign: "left" }}
-                onClick={() => handleStatusChange(statusChangeMed, s)}
-              >
-                <StatusBadge status={s} />
-                {statusChangeMed.status === s && <span style={{ marginLeft: "auto", fontSize: 11 }}>Current</span>}
-              </button>
-            ))}
-          </div>
-          <div className="modal-footer">
-            <button className="btn btn-secondary" onClick={() => setStatusChangeMed(null)}>Cancel</button>
-          </div>
+        <StatusChangeModal statusChangeMed={statusChangeMed} setStatusChangeMed={setStatusChangeMed} handleStatusChange={handleStatusChange} />
+      )}
+
+      {/* New Sale Modal */}
+      {showSale && (
+        <Modal title="Create New Sale" onClose={() => setShowSale(false)}>
+          {saleLoading ? (
+            <Spinner />
+          ) : (
+            <CreateSaleForm saleError={saleError} saleCustomer={saleCustomer} setSaleCustomer={setSaleCustomer} saleItems={saleItems} updateSaleLine={updateSaleLine} saleMedicines={saleMedicines} selectedMedicineIds={selectedMedicineIds} addSaleLine={addSaleLine} removeSaleLine={removeSaleLine} handleCreateSale={handleCreateSale} setShowSale={setShowSale} saleSaving={saleSaving} />
+          )}
+        </Modal>
+      )}
+
+      {/* New Purchase Modal */}
+      {showPurchase && (
+        <Modal title="Create New Purchase" onClose={() => setShowPurchase(false)}>
+          {purchaseLoading ? (
+            <Spinner />
+          ) : (
+            <CreatePurchaseForm purchaseError={purchaseError} purchaseForm={purchaseForm} setPurchaseForm={setPurchaseForm} purchaseMedicines={purchaseMedicines} handleCreatePurchase={handleCreatePurchase} setShowPurchase={setShowPurchase} purchaseSaving={purchaseSaving} />
+          )}
         </Modal>
       )}
     </>

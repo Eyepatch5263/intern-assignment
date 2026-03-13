@@ -1,11 +1,14 @@
 import axios from "axios";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = "http://localhost:3000";
 
 const api = axios.create({ baseURL: API_BASE });
 
 export const dashboardApi = {
-  getSummary: () => api.get("/api/dashboard/summary").then((r) => r.data),
+  getSummary: () => {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return api.get("/api/dashboard/summary", { params: { tz } }).then((r) => r.data);
+  },
 };
 
 export const salesApi = {
@@ -36,6 +39,8 @@ export const inventoryApi = {
 export const purchaseOrderApi = {
   getOrders: (params = {}) =>
     api.get("/api/purchase-orders", { params }).then((r) => r.data),
+  getRecent: (limit = 10) =>
+    api.get("/api/purchase-orders", { params: { limit } }).then((r) => r.data),
   createOrder: (payload) =>
     api.post("/api/purchase-orders", payload).then((r) => r.data),
   updateStatus: (id, status) =>
