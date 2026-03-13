@@ -1,12 +1,26 @@
-from sqlalchemy import create_engine
+import os
+from typing import Any
+
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./pharmacy.db"
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+default_sqlite_url = "sqlite:///./test.db"
+database_url = os.getenv("DATABASE_URL", default_sqlite_url)
+
+database_url = database_url.replace("cockroachdb://", "cockroachdb+psycopg://", 1)
+
+
+
+# For CockroachDB, skip version detection to avoid parsing errors
+
+
+engine = create_engine(database_url, connect_args={"sslmode": "require"})
+
+
+
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

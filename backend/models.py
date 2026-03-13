@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, func, Sequence
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
@@ -22,7 +22,7 @@ class PurchaseOrderStatus(str, enum.Enum):
 class Medicine(Base):
     __tablename__ = "medicines"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, Sequence('medicines_id_seq'), primary_key=True, index=True)
     name = Column(String, nullable=False, index=True)
     category = Column(String, nullable=False)
     manufacturer = Column(String, nullable=True)
@@ -32,8 +32,8 @@ class Medicine(Base):
     expiry_date = Column(String, nullable=True)
     status = Column(String, default=MedicineStatus.active)
     description = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
     sale_items = relationship("SaleItem", back_populates="medicine")
     purchase_orders = relationship("PurchaseOrder", back_populates="medicine")
@@ -42,10 +42,10 @@ class Medicine(Base):
 class Sale(Base):
     __tablename__ = "sales"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, Sequence('sales_id_seq'), primary_key=True, index=True)
     customer_name = Column(String, nullable=True, default="Walk-in Customer")
     total_amount = Column(Float, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=func.now())
 
     items = relationship("SaleItem", back_populates="sale")
 
@@ -53,7 +53,7 @@ class Sale(Base):
 class SaleItem(Base):
     __tablename__ = "sale_items"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, Sequence('sale_items_id_seq'), primary_key=True, index=True)
     sale_id = Column(Integer, ForeignKey("sales.id"))
     medicine_id = Column(Integer, ForeignKey("medicines.id"))
     quantity = Column(Integer, nullable=False)
@@ -67,14 +67,14 @@ class SaleItem(Base):
 class PurchaseOrder(Base):
     __tablename__ = "purchase_orders"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, Sequence('purchase_orders_id_seq'), primary_key=True, index=True)
     medicine_id = Column(Integer, ForeignKey("medicines.id"))
     quantity = Column(Integer, nullable=False)
     unit_cost = Column(Float, nullable=False)
     total_cost = Column(Float, nullable=False)
     status = Column(String, default=PurchaseOrderStatus.pending)
     supplier = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
     medicine = relationship("Medicine", back_populates="purchase_orders")

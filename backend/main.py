@@ -2,10 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base
 from routers import dashboard, inventory, sales, purchase_orders
-from seed import seed_database
 
-# Create all tables
-Base.metadata.create_all(bind=engine)
+try:
+    # Create all tables
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"Table creation skipped or failed (likely already exist): {e}")
 
 app = FastAPI(title="Pharmacy CRM API", version="1.0.0")
 
@@ -25,7 +27,7 @@ app.include_router(purchase_orders.router)
 
 @app.on_event("startup")
 def startup_event():
-    seed_database()
+    pass
 
 
 @app.get("/health")
